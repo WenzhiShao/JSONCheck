@@ -2,14 +2,14 @@
 #include<stack>
 #include<iostream>
 using namespace std;
-enum status { namev_alue, value };
-enum type { is_name, is_value, is_free };
+enum status { unorder, order };
+enum type { nv_empty, nv_name, nv_value, ordered_value };
 void deleteAllMark(string& s, const string& mark)
 {
 	size_t nSize = mark.size();
 	while (1)
 	{
-		size_t pos = s.find(mark);    //  尤其是这里
+		size_t pos = s.find(mark);    
 		if (pos == string::npos)
 		{
 			return;
@@ -25,25 +25,56 @@ bool JSONCheck(string& jstr)
 		return false;
 	stack<char> s1;
 	stack<status> s2;
-	type test = is_free;
+	type test;
 	if (jstr[0] == '{')
 	{
 		s1.push(jstr[0]);
-		s2.push(namev_alue);
-		test = is_name;
+		s2.push(unorder);
+		test = nv_empty;
 	}
 	else if (jstr[0] == '[')
 	{
 		s1.push(jstr[0]);
-		s2.push(value);
-		is_free;
+		s2.push(order);
+		test = ordered_value;
 	}
 	else
 		return false;
 
-	for (int i = 1;i < jstr.size();i++)
+	for (size_t i = 1;i < jstr.size();i++)
 	{
-		if (test == is_name)
+		if (test == nv_empty)
+		{
+			if (jstr[i] == '"' && s2.top() == unorder)
+				test = nv_name;
+			else if (jstr[i] == '}')
+			{
+				if (s1.top() == '{')
+				{
+					s1.pop();
+					s2.pop();
+					if (!s2.empty())
+					{
+						switch (s2.top())
+						{
+						case unorder:
+							test = nv_name;
+							break;
+						case order:
+							test = ordered_value;
+							break;
+						}
+					}
+					else
+						break;
+				}
+				else
+					return false;
+			}
+			else
+				return false;
+		}
+		if (test == nv_name)
 		{
 			if (jstr[i] == '"')
 			{
@@ -52,7 +83,7 @@ bool JSONCheck(string& jstr)
 					s1.pop();
 					if (i + 1 < jstr.size() && jstr[i + 1] == ':')
 					{
-						test = is_value;
+						test = nv_value;
 						i++;
 					}
 					else
@@ -63,15 +94,41 @@ bool JSONCheck(string& jstr)
 					s1.push(jstr[i]);
 				}
 			}
+			else if (s1.top() != '"')
+				return false;
+			//if (jstr[i] == '}')
+			//{
+			//	if (s1.top() == '{')
+			//	{
+			//		s1.pop();
+			//		s2.pop();
+			//		if (!s2.empty())
+			//		{
+			//			switch (s2.top())
+			//			{
+			//			case unorder:
+			//				test = nv_name;
+			//				break;
+			//			case order:
+			//				test = ordered_value;
+			//				break;
+			//			}
+			//		}
+			//		else
+			//			break;
+			//	}
+			//	else
+			//		return false;
+			//}
 		}
-		else if (test == is_value)
+		else if (test == nv_value)
 		{
 			if (jstr[i] == ',')
 			{
 				if (jstr[i - 1] == ':')
 					return false;
 				else
-					test = is_name;
+					test = nv_name;
 			}
 				
 			else if (jstr[i] == '"')
@@ -87,19 +144,24 @@ bool JSONCheck(string& jstr)
 			{
 				if (s1.top() == '{')
 				{
-					if (s2.top() == namev_alue)
+					if (s2.top() == unorder)
 					{
 						s1.pop();
 						s2.pop();
-						switch (s2.top())
+						if (!s2.empty())
 						{
-						case namev_alue:
-							test = is_name;
-							break;
-						case value:
-							test = is_free;
-							break;
+							switch (s2.top())
+							{
+							case unorder:
+								test = nv_name;
+								break;
+							case order:
+								test = ordered_value;
+								break;
+							}
 						}
+						else
+							break;
 					}
 					else
 						return false;
@@ -110,34 +172,39 @@ bool JSONCheck(string& jstr)
 			else if (jstr[i] == '{')
 			{
 				s1.push(jstr[i]);
-				s2.push(namev_alue);
-				test = is_name;
+				s2.push(unorder);
+				test = nv_name;
 			}
 
 			else if (jstr[i] == '[')
 			{
 				s1.push(jstr[i]);
-				s2.push(value);
-				test = is_free;
+				s2.push(order);
+				test = ordered_value;
 			}
 
 			else if (jstr[i] == ']')
 			{
 				if (s1.top() == '[')
 				{
-					if (s2.top() == value)
+					if (s2.top() == order)
 					{
 						s1.pop();
 						s2.pop();
-						switch (s2.top())
+						if (!s2.empty())
 						{
-						case namev_alue:
-							test = is_name;
-							break;
-						case value:
-							test = is_free;
-							break;
+							switch (s2.top())
+							{
+							case unorder:
+								test = nv_name;
+								break;
+							case order:
+								test = ordered_value;
+								break;
+							}
 						}
+						else
+							break;
 					}
 					else
 						return false;
@@ -149,7 +216,7 @@ bool JSONCheck(string& jstr)
 
 
 		}
-		else if (test == is_free)
+		else if (test == ordered_value)
 		{
 			if (jstr[i] == '"')
 			{
@@ -162,18 +229,48 @@ bool JSONCheck(string& jstr)
 			if (jstr[i] == '{')
 			{
 				s1.push(jstr[i]);
-				s2.push(namev_alue);
-				test = is_name;
+				s2.push(unorder);
+				test = nv_empty;
 			}
 			if (jstr[i] == '[')
 			{
 				s1.push(jstr[i]);
-				s2.push(value);
-				test = is_free;
+				s2.push(order);
+				test = ordered_value;
 			}
-			if (jstr[i] == ',');
-		}
 
+			if (jstr[i] == ']')
+			{
+				if (s1.top() == '[')
+				{
+					s1.pop();
+					s2.pop();
+					if (!s2.empty())
+					{
+						switch (s2.top())
+						{
+						case unorder:
+							test = nv_name;
+							break;
+						case order:
+							test = ordered_value;
+							break;
+						}
+					}
+					else
+						break;
+				}
+				else
+					return false;
+			}
+			if (jstr[i] == ',')
+			{
+				if (i + 1 < jstr.size() && jstr[i + 1] != ']')
+					continue;
+				else
+					return false;
+			}
+		}
 	}
 
 	if (s1.empty() && s2.empty())
